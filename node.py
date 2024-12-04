@@ -3,12 +3,14 @@ from blockchain import Blockchain
 
 app = Flask(__name__)
 blockchain = Blockchain()
-
 @app.route('/mine', methods=['GET'])
 def mine():
+    if len(blockchain.current_transactions) == 0:
+        return jsonify({'message': 'No transactions to mine'}), 400
+
     validator = blockchain.select_validator()
     last_block = blockchain.last_block
-    proof = 100  # Proof of Work ที่ง่าย ๆ
+    proof = 100
     previous_hash = blockchain.hash(last_block)
     block = blockchain.new_block(proof, previous_hash)
     response = {
@@ -46,6 +48,21 @@ def register_nodes():
     }
     return jsonify(response), 201
 
+@app.route('/nodes/check_ram',methods=['GET'])
+def check_ram():
+    address = request.args.get('address')
+    if address is None:
+        return "Error: Please supply a  valid not address",400
+    ram = blockchain.check_ram(address)
+    if ram is not None:
+        response = {
+            'message': 'Node RAM found',
+            'node': address,
+            'ram': ram,
+        }
+        return jsonify(response),200
+    else:
+        return "Error: Node not found",400
 @app.route('/nodes/resolve', methods=['GET'])
 def consensus():
     replaced = blockchain.resolve_conflicts()
@@ -59,6 +76,14 @@ def consensus():
             'message': 'Our chain is authoritative',
             'chain': blockchain.chain
         }
+    return jsonify(response), 200
+
+@app.route('/chain', methods=['GET'])
+def full_chain():
+    response = {
+        'chain': blockchain.chain,
+        'length': len(blockchain.chain),
+    }
     return jsonify(response), 200
 
 if __name__ == '__main__':

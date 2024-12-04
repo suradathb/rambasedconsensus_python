@@ -1,3 +1,5 @@
+import requests
+from flask import Flask, jsonify, request
 import hashlib
 import json
 from time import time
@@ -8,14 +10,17 @@ class Blockchain:
         self.chain = []
         self.current_transactions = []
         self.nodes = set()
-        self.ram_stakes = {}  # เก็บข้อมูลการ stake RAM ของแต่ละ node
+        self.ram_stakes = {}
 
-        # สร้างบล็อก genesis
         self.new_block(previous_hash='1', proof=100)
 
     def register_node(self, address, ram):
         self.nodes.add(address)
         self.ram_stakes[address] = ram
+
+    def check_ram(self,address):
+        # ตรวจสอบ RAM ที่ประกาศไว้ของโหนดที่ระบบ
+        return self.ram_stakes.get(address,None)
 
     def new_block(self, proof, previous_hash=None):
         block = {
@@ -56,7 +61,6 @@ class Blockchain:
                 return node
 
     def validate_block(self, block):
-        # ตรวจสอบธุรกรรมและบล็อก
         return True
 
     def slash_validator(self, validator):
@@ -64,6 +68,38 @@ class Blockchain:
             del self.ram_stakes[validator]
             self.nodes.remove(validator)
 
+    def valid_chain(self, chain):
+        last_block = chain[0]
+        current_index = 1
+
+        while current_index < len(chain):
+            block = chain[current_index]
+            if block['previous_hash'] != self.hash(last_block):
+                return False
+            last_block = block
+            current_index += 1
+
+        return True
+
     def resolve_conflicts(self):
-        # กลไกฉันทามติ
+        neighbours = self.nodes
+        new_chain = None
+
+        max_length = len(self.chain)
+
+        for node in neighbours:
+            response = requests.get(f'http://{node}/chain')
+
+            if response.status_code == 200:
+                length = response.json()['length']
+                chain = response.json()['chain']
+
+                if length > max_length and self.valid_chain(chain):
+                    max_length = length
+                    new_chain = chain
+
+        if new_chain:
+            self.chain = new_chain
+            return True
+
         return False
